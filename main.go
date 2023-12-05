@@ -69,7 +69,7 @@ func main() {
 							switch {
 							case strings.Contains(arch, "executable arm64"):
 								arm64Executables = append(arm64Executables, macOSFilePath)
-							case strings.Contains(arch, "64-bit executable x86_64"):
+							case strings.Contains(arch, "executable x86_64"):
 								x8664executables = append(x8664executables, macOSFilePath)
 							case strings.Contains(arch, "universal"):
 								universalExecutables = append(universalExecutables, macOSFilePath)

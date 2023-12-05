@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +21,12 @@ func main() {
 		fmt.Println("Error opening directory:", err)
 		return
 	}
-	defer dir.Close()
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println("Error closing directory:", err)
+		}
+	}(dir)
 
 	// Read the directory entries
 	fileInfos, err := dir.Readdir(0)
@@ -33,7 +37,7 @@ func main() {
 
 	// Slices to store executables based on architectures
 	var arm64Executables []string
-	var x86_64Executables []string
+	var x8664executables []string
 	var universalExecutables []string
 
 	// Iterate through the entries and parse Info.plist
@@ -49,7 +53,7 @@ func main() {
 				} else {
 					// fmt.Printf("CFBundleExecutable for %s: %s\n", infoPlistPath, cfBundleExecutable)
 
-					// Check for the existence of a file with CFBundleExecutable under the MacOS directory
+					// Check for the existence of a file with CFBundleExecutable under the macOS directory
 					macOSFilePath := filepath.Join(dirPath, fileInfo.Name(), "Contents", "MacOS", cfBundleExecutable)
 					if _, err := os.Stat(macOSFilePath); err == nil {
 						// fmt.Printf("Executable file found at: %s\n", macOSFilePath)
@@ -66,7 +70,7 @@ func main() {
 							case strings.Contains(arch, "executable arm64"):
 								arm64Executables = append(arm64Executables, macOSFilePath)
 							case strings.Contains(arch, "64-bit executable x86_64"):
-								x86_64Executables = append(x86_64Executables, macOSFilePath)
+								x8664executables = append(x8664executables, macOSFilePath)
 							case strings.Contains(arch, "universal"):
 								universalExecutables = append(universalExecutables, macOSFilePath)
 							}
@@ -81,12 +85,12 @@ func main() {
 
 	// Sort the executable names in each slice
 	sort.Strings(arm64Executables)
-	sort.Strings(x86_64Executables)
+	sort.Strings(x8664executables)
 	sort.Strings(universalExecutables)
 
 	// Print the categorized and sorted executables
 	fmt.Println("Intel Binaries")
-	printExecutables(x86_64Executables)
+	printExecutables(x8664executables)
 
 	fmt.Println("\nApple Binaries")
 	printExecutables(arm64Executables)
@@ -97,7 +101,7 @@ func main() {
 
 func parseInfoPlist(filePath string) (string, error) {
 	// Read the content of the Info.plist file
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}

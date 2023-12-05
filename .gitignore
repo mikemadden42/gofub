@@ -22,3 +22,6 @@ go.work
 
 # project binaries
 gofub
+
+# jetbrains directories
+.idea/

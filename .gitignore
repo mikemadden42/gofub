@@ -25,3 +25,6 @@ gofub
 
 # jetbrains directories
 .idea/
+
+# logs
+*.log

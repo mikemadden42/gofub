@@ -28,3 +28,6 @@ gofub
 
 # logs
 *.log
+
+# goreleaser output
+dist/

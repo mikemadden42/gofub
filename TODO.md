@@ -30,7 +30,7 @@ Findings from a project review (2026-11-14), in suggested order of priority.
   - Move the goimports settings under `formatters.settings`. `local-prefixes: github.com/mikemadden42` doesn't match the module path (`gofub`).
   - Resolve the current findings: G304 and the missing package comment (G204 fixed by the `debug/macho` switch).
   - Note: listing a revive rule replaces revive's defaults, so `enable-default-rules: true` keeps the comment checks on.
-- [ ] **Fix `.goreleaser.yaml`.** `goreleaser check` currently fails.
+- [x] **Fix `.goreleaser.yaml`.** `goreleaser check` currently fails.
   - Add `version: 2` at the top.
   - Replace the deprecated `snapshot.name_template` with `version_template`.
   - Remove the unneeded `go generate` hook and the boilerplate template comments.

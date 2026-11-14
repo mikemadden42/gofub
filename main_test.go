@@ -173,3 +173,32 @@ func TestRunMissingRoot(t *testing.T) {
 		t.Error("run(missing root) error = nil, want error")
 	}
 }
+
+func TestParseInfoPlist(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+		wantErr bool
+	}{
+		{"xml", `<plist><dict><key>CFBundleExecutable</key><string>App</string></dict></plist>`, "App", false},
+		{"missing key", `<plist><dict><key>CFBundleName</key><string>App</string></dict></plist>`, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "Info.plist")
+			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := parseInfoPlist(path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseInfoPlist error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("parseInfoPlist = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

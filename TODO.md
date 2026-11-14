@@ -13,12 +13,12 @@ Findings from a project review (2026-11-14), in suggested order of priority.
 - [x] **Error handling.**
   - Print errors to stderr instead of stdout, and exit non-zero on fatal errors such as failing to open the directory.
   - Remove the duplicated message: `parseInfoPlist` already says "error parsing X: …" and `main` adds "Error parsing X:" in front. Wrap with `%w` and add context in one place.
-- [ ] **Style and cleanup.**
+- [x] **Style and cleanup.**
   - [x] Flatten the six-level nesting in `main` with early `continue`s.
   - [x] Replace `os.Open` + `Readdir(0)` + the deferred close closure with `os.ReadDir`.
-  - [ ] Parse the plist into a struct with a `plist:"CFBundleExecutable"` tag instead of `map[string]interface{}`.
+  - [x] Parse the plist into a struct with a `plist:"CFBundleExecutable"` tag instead of `map[string]interface{}`.
   - [x] Delete the commented-out debug `Printf`s.
-  - [ ] Make variable naming consistent (`x8664executables` vs `arm64Executables`).
+  - [x] Make variable naming consistent (now `appleExecutables` / `intelExecutables`).
 
 ## Tooling and config
 

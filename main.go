@@ -45,8 +45,8 @@ func run(roots []string, recursive bool) error {
 	}
 
 	// Slices to store executables based on architectures
-	var arm64Executables []string
-	var x8664executables []string
+	var appleExecutables []string
+	var intelExecutables []string
 	var universalExecutables []string
 	var otherExecutables []string
 
@@ -75,9 +75,9 @@ func run(roots []string, recursive bool) error {
 		// Categorize executables based on architecture
 		switch arch {
 		case archApple:
-			arm64Executables = append(arm64Executables, macOSFilePath)
+			appleExecutables = append(appleExecutables, macOSFilePath)
 		case archIntel:
-			x8664executables = append(x8664executables, macOSFilePath)
+			intelExecutables = append(intelExecutables, macOSFilePath)
 		case archUniversal:
 			universalExecutables = append(universalExecutables, macOSFilePath)
 		default:
@@ -86,17 +86,17 @@ func run(roots []string, recursive bool) error {
 	}
 
 	// Sort the executable names in each slice
-	sort.Strings(arm64Executables)
-	sort.Strings(x8664executables)
+	sort.Strings(appleExecutables)
+	sort.Strings(intelExecutables)
 	sort.Strings(universalExecutables)
 	sort.Strings(otherExecutables)
 
 	// Print the categorized and sorted executables
 	fmt.Println("Intel Binaries")
-	printExecutables(x8664executables)
+	printExecutables(intelExecutables)
 
 	fmt.Println("\nApple Binaries")
-	printExecutables(arm64Executables)
+	printExecutables(appleExecutables)
 
 	fmt.Println("\nUniversal Binaries")
 	printExecutables(universalExecutables)
@@ -158,19 +158,19 @@ func parseInfoPlist(filePath string) (string, error) {
 		return "", err
 	}
 
-	// Try to unmarshal as plist
-	var plistData map[string]interface{}
-	_, err = plist.Unmarshal(content, &plistData)
+	// Unmarshal only the key we need
+	var info struct {
+		CFBundleExecutable string `plist:"CFBundleExecutable"`
+	}
+	_, err = plist.Unmarshal(content, &info)
 	if err != nil {
 		return "", fmt.Errorf("parsing %s: %w", filePath, err)
 	}
 
-	// Access the value of CFBundleExecutable from the map
-	if cfBundleExecutable, ok := plistData["CFBundleExecutable"].(string); ok {
-		return cfBundleExecutable, nil
+	if info.CFBundleExecutable == "" {
+		return "", fmt.Errorf("CFBundleExecutable not found in %s", filePath)
 	}
-
-	return "", fmt.Errorf("CFBundleExecutable not found in %s", filePath)
+	return info.CFBundleExecutable, nil
 }
 
 // archCategory groups executables by the CPU architectures they contain.

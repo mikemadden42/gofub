@@ -8,9 +8,8 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
+    # Inspects macOS app bundles, so only darwin is useful
     goos:
-      - linux
-      - windows
       - darwin
 archives:
   - id: gofub

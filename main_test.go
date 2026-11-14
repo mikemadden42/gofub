@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -107,5 +108,68 @@ func TestParseInfoPlistInvalid(t *testing.T) {
 	}
 	if n := strings.Count(err.Error(), path); n != 1 {
 		t.Errorf("parseInfoPlist(invalid) error %q mentions path %d times, want 1", err, n)
+	}
+}
+
+// makeBundle creates a minimal app bundle with an Info.plist at path.
+func makeBundle(t *testing.T, path string) {
+	t.Helper()
+	contents := filepath.Join(path, "Contents")
+	if err := os.MkdirAll(contents, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(contents, "Info.plist"), []byte("<plist><dict/></plist>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFindBundles(t *testing.T) {
+	root := t.TempDir()
+	makeBundle(t, filepath.Join(root, "Top.app"))
+	makeBundle(t, filepath.Join(root, "Utilities", "Nested.app"))
+	makeBundle(t, filepath.Join(root, "Top.app", "Contents", "Helpers", "Helper.app"))
+	if err := os.MkdirAll(filepath.Join(root, "Empty"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	elsewhere := t.TempDir()
+	makeBundle(t, filepath.Join(elsewhere, "Linked.app"))
+	if err := os.Symlink(filepath.Join(elsewhere, "Linked.app"), filepath.Join(root, "Linked.app")); err != nil {
+		t.Fatal(err)
+	}
+	// A symlink back to root must not cause an endless walk
+	if err := os.Symlink(root, filepath.Join(root, "Loop")); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name      string
+		recursive bool
+		want      []string
+	}{
+		{"top level", false, []string{"Linked.app", "Top.app"}},
+		{"recursive", true, []string{"Linked.app", "Top.app", filepath.Join("Utilities", "Nested.app")}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := findBundles(root, tt.recursive)
+			if err != nil {
+				t.Fatalf("findBundles error = %v", err)
+			}
+			want := make([]string, len(tt.want))
+			for i, rel := range tt.want {
+				want[i] = filepath.Join(root, rel)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("findBundles = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestRunMissingRoot(t *testing.T) {
+	if err := run([]string{filepath.Join(t.TempDir(), "missing")}, false); err == nil {
+		t.Error("run(missing root) error = nil, want error")
 	}
 }

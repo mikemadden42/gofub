@@ -3,7 +3,9 @@ package main
 import (
 	"debug/macho"
 	"errors"
+	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,32 +15,33 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	recursive := flag.Bool("r", false, "search subdirectories for app bundles")
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [-r] [dir ...]\n\nDirectories default to /Applications.\n\n", filepath.Base(os.Args[0]))
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	roots := flag.Args()
+	if len(roots) == 0 {
+		roots = []string{"/Applications"}
+	}
+
+	if err := run(roots, *recursive); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	// Specify the directory path
-	dirPath := "/Applications"
-
-	// Open the main directory
-	dir, err := os.Open(dirPath)
-	if err != nil {
-		return fmt.Errorf("opening directory: %w", err)
-	}
-	defer func(dir *os.File) {
-		err := dir.Close()
+func run(roots []string, recursive bool) error {
+	// Collect app bundles from every directory to scan
+	var bundles []string
+	for _, root := range roots {
+		found, err := findBundles(root, recursive)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error closing directory:", err)
+			return err
 		}
-	}(dir)
-
-	// Read the directory entries
-	fileInfos, err := dir.Readdir(0)
-	if err != nil {
-		return fmt.Errorf("reading directory: %w", err)
+		bundles = append(bundles, found...)
 	}
 
 	// Slices to store executables based on architectures
@@ -47,46 +50,38 @@ func run() error {
 	var universalExecutables []string
 	var otherExecutables []string
 
-	// Iterate through the entries and parse Info.plist
-	for _, fileInfo := range fileInfos {
-		if fileInfo.IsDir() {
-			// Check if Info.plist exists in the directory
-			infoPlistPath := filepath.Join(dirPath, fileInfo.Name(), "Contents", "Info.plist")
-			if _, err := os.Stat(infoPlistPath); err == nil {
-				// Parse Info.plist
-				cfBundleExecutable, err := parseInfoPlist(infoPlistPath)
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err)
-				} else {
-					// fmt.Printf("CFBundleExecutable for %s: %s\n", infoPlistPath, cfBundleExecutable)
+	// Parse each bundle's Info.plist and classify its executable
+	for _, bundle := range bundles {
+		cfBundleExecutable, err := parseInfoPlist(filepath.Join(bundle, "Contents", "Info.plist"))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			continue
+		}
 
-					// Check for the existence of a file with CFBundleExecutable under the macOS directory
-					macOSFilePath := filepath.Join(dirPath, fileInfo.Name(), "Contents", "MacOS", cfBundleExecutable)
-					if _, err := os.Stat(macOSFilePath); err == nil {
-						// fmt.Printf("Executable file found at: %s\n", macOSFilePath)
+		// Check for the existence of a file with CFBundleExecutable under the macOS directory
+		macOSFilePath := filepath.Join(bundle, "Contents", "MacOS", cfBundleExecutable)
+		if _, err := os.Stat(macOSFilePath); err != nil {
+			fmt.Fprintf(os.Stderr, "Executable file not found at: %s\n", macOSFilePath)
+			continue
+		}
 
-						// Read the architectures from the Mach-O headers
-						arch, err := executableArch(macOSFilePath)
-						if err != nil {
-							fmt.Fprintln(os.Stderr, "Error determining architecture:", err)
-						} else {
-							// Categorize executables based on architecture
-							switch arch {
-							case archApple:
-								arm64Executables = append(arm64Executables, macOSFilePath)
-							case archIntel:
-								x8664executables = append(x8664executables, macOSFilePath)
-							case archUniversal:
-								universalExecutables = append(universalExecutables, macOSFilePath)
-							default:
-								otherExecutables = append(otherExecutables, macOSFilePath)
-							}
-						}
-					} else {
-						fmt.Fprintf(os.Stderr, "Executable file not found at: %s\n", macOSFilePath)
-					}
-				}
-			}
+		// Read the architectures from the Mach-O headers
+		arch, err := executableArch(macOSFilePath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error determining architecture:", err)
+			continue
+		}
+
+		// Categorize executables based on architecture
+		switch arch {
+		case archApple:
+			arm64Executables = append(arm64Executables, macOSFilePath)
+		case archIntel:
+			x8664executables = append(x8664executables, macOSFilePath)
+		case archUniversal:
+			universalExecutables = append(universalExecutables, macOSFilePath)
+		default:
+			otherExecutables = append(otherExecutables, macOSFilePath)
 		}
 	}
 
@@ -110,6 +105,50 @@ func run() error {
 	printExecutables(otherExecutables)
 
 	return nil
+}
+
+// findBundles returns the app bundles directly inside dir, or anywhere below
+// it when recursive is set. Bundles are not searched for nested bundles.
+func findBundles(dir string, recursive bool) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading directory: %w", err)
+	}
+
+	var bundles []string
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+
+		if entry.Type()&fs.ModeSymlink != 0 {
+			// Follow symlinks to bundles only, so recursion can't loop
+			if info, err := os.Stat(path); err == nil && info.IsDir() && isBundle(path) {
+				bundles = append(bundles, path)
+			}
+			continue
+		}
+		if !entry.IsDir() {
+			continue
+		}
+
+		switch {
+		case isBundle(path):
+			bundles = append(bundles, path)
+		case recursive:
+			nested, err := findBundles(path, true)
+			if err != nil {
+				// Unreadable subdirectories are skipped, not fatal
+				fmt.Fprintln(os.Stderr, "Error:", err)
+				continue
+			}
+			bundles = append(bundles, nested...)
+		}
+	}
+	return bundles, nil
+}
+
+func isBundle(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "Contents", "Info.plist"))
+	return err == nil
 }
 
 func parseInfoPlist(filePath string) (string, error) {

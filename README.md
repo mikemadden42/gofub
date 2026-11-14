@@ -15,7 +15,11 @@ headers directly, so it needs no external tools. It only works on macOS.
 
 ## Install
 
-Clone the repository and build it:
+```sh
+go install github.com/mikemadden42/gofub@latest
+```
+
+Or clone the repository and build it:
 
 ```sh
 git clone https://github.com/mikemadden42/gofub.git

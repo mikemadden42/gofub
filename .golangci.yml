@@ -32,4 +32,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - gofub
+        - github.com/mikemadden42/gofub

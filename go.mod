@@ -1,4 +1,4 @@
-module gofub
+module github.com/mikemadden42/gofub
 
 go 1.23
 

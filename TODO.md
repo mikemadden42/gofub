@@ -10,7 +10,7 @@ Findings from a project review (2026-11-14), in suggested order of priority.
   - Fat binaries holding only `x86_64` + `i386`, or `arm64` + `arm64e`, are reported as "Universal".
   - Fix: use the standard library's `debug/macho` (`macho.OpenFat`, falling back to `macho.Open`) to read CPU types directly. This removes the subprocess, the string parsing and gosec G204, and makes the logic unit-testable.
 - [ ] **Widen the scan.** Only the top level of `/Applications` is checked. This misses `/Applications/Utilities`, apps in vendor subfolders, `~/Applications` and `/System/Applications`. `Readdir` uses `Lstat`, so symlinked `.app` bundles are skipped. Add a flag/argument for scan path(s) and an optional recursive walk.
-- [ ] **Error handling.**
+- [x] **Error handling.**
   - Print errors to stderr instead of stdout, and exit non-zero on fatal errors such as failing to open the directory.
   - Remove the duplicated message: `parseInfoPlist` already says "error parsing X: …" and `main` adds "Error parsing X:" in front. Wrap with `%w` and add context in one place.
 - [ ] **Style and cleanup.**

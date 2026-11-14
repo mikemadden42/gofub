@@ -13,27 +13,32 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Specify the directory path
 	dirPath := "/Applications"
 
 	// Open the main directory
 	dir, err := os.Open(dirPath)
 	if err != nil {
-		fmt.Println("Error opening directory:", err)
-		return
+		return fmt.Errorf("opening directory: %w", err)
 	}
 	defer func(dir *os.File) {
 		err := dir.Close()
 		if err != nil {
-			fmt.Println("Error closing directory:", err)
+			fmt.Fprintln(os.Stderr, "Error closing directory:", err)
 		}
 	}(dir)
 
 	// Read the directory entries
 	fileInfos, err := dir.Readdir(0)
 	if err != nil {
-		fmt.Println("Error reading directory:", err)
-		return
+		return fmt.Errorf("reading directory: %w", err)
 	}
 
 	// Slices to store executables based on architectures
@@ -51,7 +56,7 @@ func main() {
 				// Parse Info.plist
 				cfBundleExecutable, err := parseInfoPlist(infoPlistPath)
 				if err != nil {
-					fmt.Printf("Error parsing %s: %v\n", infoPlistPath, err)
+					fmt.Fprintln(os.Stderr, "Error:", err)
 				} else {
 					// fmt.Printf("CFBundleExecutable for %s: %s\n", infoPlistPath, cfBundleExecutable)
 
@@ -63,7 +68,7 @@ func main() {
 						// Read the architectures from the Mach-O headers
 						arch, err := executableArch(macOSFilePath)
 						if err != nil {
-							fmt.Println("Error determining architecture:", err)
+							fmt.Fprintln(os.Stderr, "Error determining architecture:", err)
 						} else {
 							// Categorize executables based on architecture
 							switch arch {
@@ -78,7 +83,7 @@ func main() {
 							}
 						}
 					} else {
-						fmt.Printf("Executable file not found at: %s\n", macOSFilePath)
+						fmt.Fprintf(os.Stderr, "Executable file not found at: %s\n", macOSFilePath)
 					}
 				}
 			}
@@ -103,6 +108,8 @@ func main() {
 
 	fmt.Println("\nOther/Unknown")
 	printExecutables(otherExecutables)
+
+	return nil
 }
 
 func parseInfoPlist(filePath string) (string, error) {
@@ -116,7 +123,7 @@ func parseInfoPlist(filePath string) (string, error) {
 	var plistData map[string]interface{}
 	_, err = plist.Unmarshal(content, &plistData)
 	if err != nil {
-		return "", fmt.Errorf("error parsing %s: %v", filePath, err)
+		return "", fmt.Errorf("parsing %s: %w", filePath, err)
 	}
 
 	// Access the value of CFBundleExecutable from the map
@@ -161,7 +168,7 @@ func executableArch(filePath string) (archCategory, error) {
 	// Fall back to a thin (single-architecture) binary
 	thin, err := macho.Open(filePath)
 	if err != nil {
-		return archOther, err
+		return archOther, fmt.Errorf("reading %s: %w", filePath, err)
 	}
 	defer thin.Close() //nolint:errcheck // read-only file
 	return classifyCPUs([]macho.Cpu{thin.Cpu}), nil

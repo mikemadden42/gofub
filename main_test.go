@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,20 @@ func TestExecutableArchFat(t *testing.T) {
 	}
 	if got != archUniversal {
 		t.Errorf("executableArch(%s) = %v, want %v", path, got, archUniversal)
+	}
+}
+
+func TestParseInfoPlistInvalid(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Info.plist")
+	if err := os.WriteFile(path, []byte("<plist><dict><key>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := parseInfoPlist(path)
+	if err == nil {
+		t.Fatal("parseInfoPlist(invalid) error = nil, want error")
+	}
+	if n := strings.Count(err.Error(), path); n != 1 {
+		t.Errorf("parseInfoPlist(invalid) error %q mentions path %d times, want 1", err, n)
 	}
 }

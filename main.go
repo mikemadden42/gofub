@@ -1,3 +1,5 @@
+// Gofub lists the executables of macOS app bundles, grouped by whether they
+// are built for Apple silicon, Intel, or both (universal).
 package main
 
 import (
@@ -153,7 +155,7 @@ func isBundle(dir string) bool {
 
 func parseInfoPlist(filePath string) (string, error) {
 	// Read the content of the Info.plist file
-	content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(filePath) //nolint:gosec // reading bundles under user-chosen directories is the point
 	if err != nil {
 		return "", err
 	}

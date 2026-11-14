@@ -35,7 +35,7 @@ Findings from a project review (2026-11-14), in suggested order of priority.
   - Replace the deprecated `snapshot.name_template` with `version_template`.
   - Remove the unneeded `go generate` hook and the boilerplate template comments.
 - [x] **Match the build matrix to the platform.** The tool only works on macOS, but goreleaser builds Linux and Windows binaries and CI runs on Ubuntu and Windows. Restrict both to darwin, or have the tool exit with a clear "macOS only" error on other platforms. (Done: both restricted to darwin.)
-- [ ] **Add lint to CI.** Add `golangci/golangci-lint-action` to the workflow. (Table tests for architecture classification now exist in `main_test.go`.)
+- [x] **Add lint to CI.** Add `golangci/golangci-lint-action` to the workflow. (Table tests for architecture classification now exist in `main_test.go`.)
 - [ ] **Small items.**
   - Bump `go.mod` from `go 1.21` to at least 1.23 (CI's oldest version) and use newer stdlib such as `slices.Sort`.
   - Expand the README: what the tool does, that it's macOS only, and sample output.

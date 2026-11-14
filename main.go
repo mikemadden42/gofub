@@ -1,12 +1,13 @@
 package main
 
 import (
+	"debug/macho"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
-	"strings"
 
 	"howett.net/plist"
 )
@@ -39,6 +40,7 @@ func main() {
 	var arm64Executables []string
 	var x8664executables []string
 	var universalExecutables []string
+	var otherExecutables []string
 
 	// Iterate through the entries and parse Info.plist
 	for _, fileInfo := range fileInfos {
@@ -58,21 +60,21 @@ func main() {
 					if _, err := os.Stat(macOSFilePath); err == nil {
 						// fmt.Printf("Executable file found at: %s\n", macOSFilePath)
 
-						// Get architecture using the file command
-						arch, err := getExecutableArchitecture(macOSFilePath)
+						// Read the architectures from the Mach-O headers
+						arch, err := executableArch(macOSFilePath)
 						if err != nil {
 							fmt.Println("Error determining architecture:", err)
 						} else {
-							// fmt.Printf("Architecture of %s: %s\n", macOSFilePath, arch)
-
 							// Categorize executables based on architecture
-							switch {
-							case strings.Contains(arch, "executable arm64"):
+							switch arch {
+							case archApple:
 								arm64Executables = append(arm64Executables, macOSFilePath)
-							case strings.Contains(arch, "executable x86_64"):
+							case archIntel:
 								x8664executables = append(x8664executables, macOSFilePath)
-							case strings.Contains(arch, "universal"):
+							case archUniversal:
 								universalExecutables = append(universalExecutables, macOSFilePath)
+							default:
+								otherExecutables = append(otherExecutables, macOSFilePath)
 							}
 						}
 					} else {
@@ -87,6 +89,7 @@ func main() {
 	sort.Strings(arm64Executables)
 	sort.Strings(x8664executables)
 	sort.Strings(universalExecutables)
+	sort.Strings(otherExecutables)
 
 	// Print the categorized and sorted executables
 	fmt.Println("Intel Binaries")
@@ -97,6 +100,9 @@ func main() {
 
 	fmt.Println("\nUniversal Binaries")
 	printExecutables(universalExecutables)
+
+	fmt.Println("\nOther/Unknown")
+	printExecutables(otherExecutables)
 }
 
 func parseInfoPlist(filePath string) (string, error) {
@@ -121,32 +127,61 @@ func parseInfoPlist(filePath string) (string, error) {
 	return "", fmt.Errorf("CFBundleExecutable not found in %s", filePath)
 }
 
-func getExecutableArchitecture(filePath string) (string, error) {
-	// Run the file command to get the architecture
-	cmd := exec.Command("file", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
+// archCategory groups executables by the CPU architectures they contain.
+type archCategory int
+
+const (
+	archOther archCategory = iota
+	archApple
+	archIntel
+	archUniversal
+)
+
+func executableArch(filePath string) (archCategory, error) {
+	// Try a fat (multi-architecture) binary first
+	fat, err := macho.OpenFat(filePath)
+	if err == nil {
+		defer fat.Close() //nolint:errcheck // read-only file
+		cpus := make([]macho.Cpu, 0, len(fat.Arches))
+		for _, a := range fat.Arches {
+			cpus = append(cpus, a.Cpu)
+		}
+		return classifyCPUs(cpus), nil
 	}
 
-	// Extract architecture information from the output
-	arch := extractArchitecture(string(output))
-	return arch, nil
+	var formatErr *macho.FormatError
+	if !errors.As(err, &formatErr) {
+		return archOther, err
+	}
+	if err != macho.ErrNotFat {
+		// Not a Mach-O file at all, e.g. a shell script launcher
+		return archOther, nil
+	}
+
+	// Fall back to a thin (single-architecture) binary
+	thin, err := macho.Open(filePath)
+	if err != nil {
+		return archOther, err
+	}
+	defer thin.Close() //nolint:errcheck // read-only file
+	return classifyCPUs([]macho.Cpu{thin.Cpu}), nil
 }
 
-func extractArchitecture(output string) string {
-	// Example output: "/path/to/executable: Mach-O 64-bit executable x86_64"
-	parts := strings.Fields(output)
-	for _, part := range parts {
-		if part == "universal" {
-			return "universal"
-		}
-	}
+func classifyCPUs(cpus []macho.Cpu) archCategory {
+	// arm64e shares CpuArm64 and i386 is ignored, so only arm64 + x86_64 is universal
+	hasArm64 := slices.Contains(cpus, macho.CpuArm64)
+	hasAmd64 := slices.Contains(cpus, macho.CpuAmd64)
 
-	if len(parts) >= 5 {
-		return strings.Join(parts[3:], " ")
+	switch {
+	case hasArm64 && hasAmd64:
+		return archUniversal
+	case hasArm64:
+		return archApple
+	case hasAmd64:
+		return archIntel
+	default:
+		return archOther
 	}
-	return "unknown"
 }
 
 func printExecutables(executables []string) {

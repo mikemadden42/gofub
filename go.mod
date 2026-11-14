@@ -1,5 +1,5 @@
 module gofub
 
-go 1.21
+go 1.23
 
 require howett.net/plist v1.0.1

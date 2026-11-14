@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 
 	"howett.net/plist"
 )
@@ -88,10 +87,10 @@ func run(roots []string, recursive bool) error {
 	}
 
 	// Sort the executable names in each slice
-	sort.Strings(appleExecutables)
-	sort.Strings(intelExecutables)
-	sort.Strings(universalExecutables)
-	sort.Strings(otherExecutables)
+	slices.Sort(appleExecutables)
+	slices.Sort(intelExecutables)
+	slices.Sort(universalExecutables)
+	slices.Sort(otherExecutables)
 
 	// Print the categorized and sorted executables
 	fmt.Println("Intel Binaries")
